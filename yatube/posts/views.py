@@ -109,12 +109,14 @@ def add_comment(request, post_id):
         comment.save()
     return redirect('posts:post_detail', post_id=post_id)
 
+
 @login_required
 def follow_index(request):
     """информация о текущем пользователе в переменной request.user"""
     post_list = Post.objects.filter(author__following__user=request.user)
     context = get_paginated_page(request, post_list)
     return render(request, 'posts/follow.html', context)
+
 
 @login_required
 def profile_follow(request, username):
@@ -123,6 +125,7 @@ def profile_follow(request, username):
     if author != request.user:
         Follow.objects.get_or_create(user=request.user, author=author)
     return redirect('posts:follow_index')
+
 
 @login_required
 def profile_unfollow(request, username):
