@@ -104,9 +104,9 @@ class PostPagesTests(TestCase):
             name='small.gif', content=cls.small_gif, content_type='image/gif'
         )
         cls.post = Post.objects.create(
-            author=cls.user, text='Тестовый текст', group=cls.group, image=cls.uploaded
+            author=cls.user, text='Тестовый текст',
+            group=cls.group, image=cls.uploaded
         )
-
 
     @classmethod
     def tearDownClass(cls):
@@ -147,5 +147,6 @@ class PostPagesTests(TestCase):
     def test_image_in_page(self):
         """Проверяем что пост с картинкой создается в БД"""
         self.assertTrue(
-            Post.objects.filter(text='Тестовый текст', image='posts/small.gif').exists()
+            Post.objects.filter(text='Тестовый текст',
+                                image='posts/small.gif').exists()
         )

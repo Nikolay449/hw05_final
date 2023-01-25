@@ -62,7 +62,6 @@ class PostPagesTests(TestCase):
         response = self.guest_client.get(reverse('posts:index'))
         expected = list(Post.objects.all()[:10])
         self.assertEqual(list(response.context['page_obj']), expected)
-        #cache.clear()
 
     def test_group_list_show_correct_context(self):
         """Шаблон group_list сформирован с правильным контекстом."""
@@ -143,10 +142,13 @@ class PostPagesTests(TestCase):
             follow=True,
         )
         self.assertRedirects(
-            response, reverse('posts:post_detail', kwargs={'post_id': self.post.id})
+            response,
+            reverse('posts:post_detail', kwargs={'post_id': self.post.id})
         )
         self.assertEqual(Comment.objects.count(), comments_count + 1)
-        self.assertTrue(Comment.objects.filter(text='Тестовый коммент').exists())
+        self.assertTrue(
+            Comment.objects.filter(text='Тестовый коммент').exists()
+        )
 
     def test_check_cache_index(self):
         """Проверка работы кэша страници index."""
