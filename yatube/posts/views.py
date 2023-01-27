@@ -113,8 +113,11 @@ def add_comment(request, post_id):
 @login_required
 def follow_index(request):
     """информация о текущем пользователе в переменной request.user"""
-    post_list = Post.objects.filter(author__following__user=request.user)
-    context = get_paginated_page(request, post_list)
+    posts = Post.objects.filter(author__following__user=request.user)
+    context = {
+        'title': 'Избранное',
+    }
+    context.update(get_paginated_page(request, posts))
     return render(request, 'posts/follow.html', context)
 
 

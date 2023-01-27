@@ -61,6 +61,11 @@ class URLsPostTests(TestCase):
                 response = self.guest_client.get(address, follow=True)
                 self.assertRedirects(response, readdress)
 
+    def test_follow_page_is_available_at_authorized(self):
+        """Страница follow доступна авторизованному прользователю."""
+        response = self.authorized_client.get('/follow/')
+        self.assertEqual(response.status_code, HTTPStatus.OK)
+
     def test_new_post_page_exists_at_authorized(self):
         """Страница создания поста доступна авторизованному прользователю."""
         response = self.authorized_client.get('/create/')
@@ -81,6 +86,7 @@ class URLsPostTests(TestCase):
             'posts/profile.html': f'/profile/{self.user}/',
             'posts/create_post.html': '/create/',
             'posts/post_detail.html': f'/posts/{self.post.id}/',
+            'posts/follow.html': '/follow/',
         }
         for template, address in templates_url_names.items():
             with self.subTest(address=address):

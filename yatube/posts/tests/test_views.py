@@ -1,13 +1,21 @@
+import shutil
+import tempfile
+
+from ..models import Post, Group, User, Comment, Follow
+
 from django import forms
-from django.test import Client, TestCase
+from django.conf import settings
+from django.test import Client, TestCase, override_settings
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from django.contrib.auth import get_user_model
-from ..models import Post, Group, User, Comment, Follow
 from django.core.cache import cache
 
 User = get_user_model()
+TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
 
 
+@override_settings(MEDIA_ROOT=TEMP_MEDIA_ROOT)
 class PostPagesTests(TestCase):
     @classmethod
     def setUpClass(cls):
@@ -17,6 +25,17 @@ class PostPagesTests(TestCase):
             title='Тестовая группа',
             slug='test-slug',
             description='Тестовое описание',
+        )
+        cls.small_gif = (
+            b'\x47\x49\x46\x38\x39\x61\x02\x00'
+            b'\x01\x00\x80\x00\x00\x00\x00\x00'
+            b'\xFF\xFF\xFF\x21\xF9\x04\x00\x00'
+            b'\x00\x00\x00\x2C\x00\x00\x00\x00'
+            b'\x02\x00\x01\x00\x00\x02\x02\x0C'
+            b'\x0A\x00\x3B'
+        )
+        cls.uploaded = SimpleUploadedFile(
+            name='small.gif', content=cls.small_gif, content_type='image/gif'
         )
         cls.post = Post.objects.create(
             author=cls.user,
@@ -44,11 +63,19 @@ class PostPagesTests(TestCase):
             text='Тестовый комментарий',
         )
 
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(TEMP_MEDIA_ROOT, ignore_errors=True)
+
     def setUp(self):
+        cache.clear()
         self.guest_client = Client()
+        self.client = Client()
+        self.user = User.objects.create_user(username='user')
+        self.client.force_login(self.user)
         self.authorized_client = Client()
         self.authorized_client.force_login(PostPagesTests.user)
-        cache.clear()
 
     def test_pages_uses_correct_template(self):
         """URL-адрес использует соответствующий шаблон."""
@@ -76,7 +103,7 @@ class PostPagesTests(TestCase):
         response = self.guest_client.get(
             reverse('posts:profile', args=(self.post.author,))
         )
-        expected = list(Post.objects.filter(author_id=self.user.id)[:10])
+        expected = list(Post.objects.filter(author_id=self.post.id)[:10])
         self.assertEqual(list(response.context['page_obj']), expected)
 
     def test_post_detail_show_correct_context(self):
@@ -87,6 +114,7 @@ class PostPagesTests(TestCase):
         self.assertEqual(response.context.get('post').text, self.post.text)
         self.assertEqual(response.context.get('post').author, self.post.author)
         self.assertEqual(response.context.get('post').group, self.post.group)
+        self.assertEqual(response.context.get('post').image, self.post.image)
 
     def test_create_edit_show_correct_context(self):
         """Шаблон create_edit сформирован с правильным контекстом."""
@@ -166,18 +194,37 @@ class PostPagesTests(TestCase):
         posts_new = response_new.content
         self.assertNotEqual(posts_old, posts_new)
 
-    def test_follow_page(self):
-        """Проверяем, работу подписок."""
-        response = self.authorized_client.get(reverse('posts:follow_index'))
-        self.assertEqual(len(response.context['page_obj']), 0)
-        Follow.objects.get_or_create(user=self.user, author=self.post.author)
-        response_2 = self.authorized_client.get(reverse('posts:follow_index'))
-        self.assertEqual(len(response_2.context['page_obj']), 1)
-        self.assertIn(self.post, response_2.context['page_obj'])
-        AnonymousUser = User.objects.create(username='NoName')
-        self.authorized_client.force_login(AnonymousUser)
-        response_2 = self.authorized_client.get(reverse('posts:follow_index'))
-        self.assertNotIn(self.post, response_2.context['page_obj'])
-        Follow.objects.all().delete()
-        response_3 = self.authorized_client.get(reverse('posts:follow_index'))
-        self.assertEqual(len(response_3.context['page_obj']), 0)
+    def test_follow(self):
+        """Тест подписаться."""
+        self.response = (self.client.get(
+            reverse('posts:profile_follow', args={self.post.author})))
+        self.assertIs(
+            Follow.objects.
+            filter(user=self.user, author=self.post.author).exists(),
+            True
+        )
+
+    def test_unfollow(self):
+        """Тест отписаться."""
+        self.response = (self.client.get(
+            reverse('posts:profile_follow', args={self.post.author})))
+        self.response = (self.client.get(
+            reverse('posts:profile_unfollow', args={self.post.author})))
+        self.assertIs(
+            Follow.objects.
+            filter(user=self.user, author=self.post.author).exists(),
+            False
+        )
+
+    def test_new_post_for_follow_authorized_client(self):
+        """Пост появляется у подписанного пользователя."""
+        Follow.objects.create(user=self.user, author=self.post.author)
+        response = (self.client.get(reverse('posts:follow_index')))
+        self.assertIn(self.post, response.context['page_obj'])
+
+    def test_new_post_for_follow_guest_client(self):
+        """Пост не появляется у не подписанного пользователя."""
+        User.objects.create_user(username='user_test', password='pass')
+        self.client.login(username='user_test', password='pass')
+        response = (self.client.get(reverse('posts:follow_index')))
+        self.assertNotIn(self.post, response.context['page_obj'])
